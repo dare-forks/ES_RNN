@@ -48,80 +48,7 @@ string OUTPUT_DIR = "C:\\Dev\\data\\M4_Output\\";
 
 int LBACK = 0; //LBACK 0 means final mode: learning on all data and forecasting. LBACK=1 would move back by OUTPUT_SIZE, and forecast last known OUTPUT_SIZE points, for backtesting. LBACK could be a larger integer, but then number of series shrinks.
 
-
-//PARAMS--------------
-string VARIABLE = "Hourly";
-const string run = "50/49 Att 4/5 1,4)(24,168) LR=0.01,{7,5e-3f},{18,1e-3f},{22,3e-4f} EPOCHS=27, LVP=10, CSP=1";
-
-//#define USE_RESIDUAL_LSTM
-//#define USE_ATTENTIVE_LSTM
-const bool ADD_NL_LAYER = false;
-
-const float PERCENTILE = 50; //we always use Pinball loss. When forecasting point value, we actually forecast median, so PERCENTILE=50
-const float TRAINING_PERCENTILE = 49;  //the program has a tendency for positive bias. So, we can reduce it by running smaller TRAINING_PERCENTILE
-
-const int SEASONALITY_NUM = 2;//0 means no seasonality, for Yearly; 1 - single seasonality for Daily(7), Weekly(52); 2 - dual seaonality for Hourly (24,168)
-const int SEASONALITY = 24;
-const int SEASONALITY2 = 168;
-vector<vector<unsigned>> dilations = { { 1,4 },{ 24, 168 } };
-
-const float INITIAL_LEARNING_RATE = 0.01f;
-const map<int, float> LEARNING_RATES = { { 7,5e-3f },{ 18,1e-3f },{ 22,3e-4f } }; //at which epoch we manually set them up to what
-const float PER_SERIES_LR_MULTIP = 1;
-const int NUM_OF_TRAIN_EPOCHS = 27;
-
-float LEVEL_VARIABILITY_PENALTY = 10;  //Multiplier for L" penalty against wigglines of level vector.
-const float C_STATE_PENALTY = 1;
-
-const unsigned int STATE_HSIZE = 40;
-
-const unsigned int INPUT_SIZE = 24;
-const unsigned int OUTPUT_SIZE = 48;
-
-const int MIN_INP_SEQ_LEN = 0;
-const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  //this is compared to n==(total length - OUTPUT_SIZE). Total length may be truncated by LBACK
-const int MAX_SERIES_LENGTH = 53 * SEASONALITY2 + MIN_SERIES_LENGTH;  //==all
-const int TOPN = 4;
-
-
-/*
-string VARIABLE = "Weekly";
-const string run = "50/47 Att 3/5 (1,52) LR=1e-3  {11,3e-4f}, {17,1e-4f} EPOCHS=23, LVP=100 6y";
-
-const int PERCENTILE = 50; //we always use Pinball loss. When forecasting point value, we actually forecast median, so PERCENTILE=50
-const int TRAINING_PERCENTILE = 47;  //the program has a tendency for positive bias. So, we can reduce it by running smaller TRAINING_PERCENTILE
-
-//#define USE_RESIDUAL_LSTM
-#define USE_ATTENTIVE_LSTM
-const bool ADD_NL_LAYER = false;
-
-const int SEASONALITY_NUM = 0; //0 means no seasonality, for Yearly; 1 - single seasonality for Daily(7), Weekly(52); 2 - dual seaonality for Hourly (24,168)
-const int SEASONALITY = 52;
-const int SEASONALITY2 = 0;
-vector<vector<unsigned>> dilations = { { 1, 52 } };
-
-const float INITIAL_LEARNING_RATE = 1e-3;
-const map<int, float> LEARNING_RATES = { { 11,3e-4f },{ 17,1e-4f } }; //at which epoch we manually set them up to what
-const int NUM_OF_TRAIN_EPOCHS = 23;
-
-float LEVEL_VARIABILITY_PENALTY = 100;  //Multiplier for L" penalty against wigglines of level vector.
-const float C_STATE_PENALTY = 0;
-const float PER_SERIES_LR_MULTIP = 1;
-
-const unsigned int STATE_HSIZE = 40;
-
-const unsigned int INPUT_SIZE = 10;
-const unsigned int OUTPUT_SIZE = 13;
-
-const int MIN_INP_SEQ_LEN = 0;
-const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  //this is compared to n==(total length - OUTPUT_SIZE). Total length may be truncated by LBACK
-																			   //#Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
-																			   //#81     380     935    1023    1604    2598
-const int MAX_SERIES_LENGTH = 6 * SEASONALITY + MIN_SERIES_LENGTH;  //==all
-const int TOPN = 3;
-*/
-
-/*
+// Model architecture specific parameters
 string VARIABLE = "Daily";
 const string run = "Final 50/49 730 4/5 (1,3)(7,14) LR=3e-4 {9,1e-4f} EPOCHS=13, LVP=100 13w";
 //#define USE_RESIDUAL_LSTM
@@ -155,45 +82,6 @@ const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  /
 																			   //##93     323    2940    2357    4197    9919
 const int MAX_SERIES_LENGTH = 13 * SEASONALITY + MIN_SERIES_LENGTH;
 const int TOPN = 4;
-*/
-
-/*
-string VARIABLE = "Yearly";
-const string run = "50 Att 4/5 (1,6) LR=1e-4  EPOCHS=12, 60*";
-
-//#define USE_RESIDUAL_LSTM
-#define USE_ATTENTIVE_LSTM
-const bool ADD_NL_LAYER = false;
-
-const float PERCENTILE = 50; //we always use Pinball loss. When forecasting point value, we actually forecast median, so PERCENTILE=50
-const float TRAINING_PERCENTILE = 50;
-
-const int SEASONALITY_NUM = 0; //0 means no seasonality, for Yearly; 1 - single seasonality for Daily(7), Weekly(52); 2 - dual seaonality for Hourly (24,168)
-const int SEASONALITY = 0;
-const int SEASONALITY2 = 0;
-vector<vector<unsigned>> dilations = { { 1,6 } };
-
-const float INITIAL_LEARNING_RATE = 1e-4;
-const map<int, float> LEARNING_RATES = { { 15,1e-5 } }; //at which epoch we manually set them up to what
-const float PER_SERIES_LR_MULTIP = 1;
-const int NUM_OF_TRAIN_EPOCHS = 12;
-
-float LEVEL_VARIABILITY_PENALTY = 0;  //Multiplier for L" penalty against wigglines of level vector.
-const float C_STATE_PENALTY = 0;
-
-const unsigned int STATE_HSIZE = 30;
-
-const unsigned int INPUT_SIZE = 4;
-const unsigned int OUTPUT_SIZE = 6;
-
-const int MIN_INP_SEQ_LEN = 0;
-const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  //this is compared to n==(total length - OUTPUT_SIZE). Total length may be truncated by LBACK
-																			   //#Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
-																			   //#13.00   20.00   29.00   31.32   40.00  835.00
-const int MAX_SERIES_LENGTH = 60 + MIN_SERIES_LENGTH;
-const int TOPN = 4;
-*/
-
 //end of VARIABLE-specific params
 
 const int BIG_LOOP = 3;
