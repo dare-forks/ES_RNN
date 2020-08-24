@@ -21,15 +21,6 @@ There are four blocks of parameters below, one active (starting with //PARAMS---
 These blocks are as they were during the final forecasting run. You need comment/uncomment to have one block of interest active.
 */
 
-
-//#define USE_ODBC
-//define USE_ODBC if you want to 
-// 1. run the program in backtesting mode (which means you also need to set LBACK>0 below. Read the comment below.
-// 2. save forecasts to a datatabase. Mysql and SQL Server were tested. The table creation and some other scripts should be found in \sql directory of the source code.
-// Of course setting up ODBC is not that simple, :-), e.g. you need to create DSN=slawek, that points to a database with the output table.
-// Saving to the db is convenient, but not necessary - all forecasts are always saved to as csv files in automatically created subdirectory (sorry sometimes two directories, so you have to copy :-)) of OUTPUT_DIR
-//If saving to database you need to modify run varaible, for each new run, otherwise you will get the table key error.
-
 #include "dynet/dynet.h"
 #include "dynet/training.h"
 #include "dynet/expr.h"
@@ -39,15 +30,6 @@ These blocks are as they were during the final forecasting run. You need comment
 #include "dynet/expr.h"
 #include "dynet/lstm.h"
 #include "slstm.h" //my implementation of dilated LSTMs
-
-
-#if defined USE_ODBC        
-#if defined _WINDOWS
-#include <windows.h>
-#endif  
-#include <sqlext.h>
-#include <sql.h>
-#endif 
 
 #include <ctime>
 #include <numeric>
@@ -61,11 +43,8 @@ These blocks are as they were during the final forecasting run. You need comment
 using namespace std;
 using namespace dynet;
 
-
 string DATA_DIR = "C:\\Dev\\data\\M4_Dataset\\Train\\"; //with the competition data csvs
-//string DATA_DIR="/home/uber/progs/data/M4DataSet/";
 string OUTPUT_DIR = "C:\\Dev\\data\\M4_Output\\";
-//string OUTPUT_DIR="/home/uber/progs/data/M4/";
 
 int LBACK = 0; //LBACK 0 means final mode: learning on all data and forecasting. LBACK=1 would move back by OUTPUT_SIZE, and forecast last known OUTPUT_SIZE points, for backtesting. LBACK could be a larger integer, but then number of series shrinks.
 
@@ -262,41 +241,6 @@ float expand(float x)
 	return exp(x);
 }
 
-
-#if defined USE_ODBC
-void HandleDiagnosticRecord(SQLHANDLE      hHandle,
-	SQLSMALLINT    hType,
-	RETCODE        RetCode);
-
-#if defined _WINDOWS
-WCHAR* pwszConnStr = L"DSN=slawek";
-#else
-SQLCHAR* pwszConnStr = (SQLCHAR*) "DSN=slawek";
-#endif   
-#define TRYODBC(h, ht, x)   {   RETCODE rc = x;\
-                                if (rc != SQL_SUCCESS) \
-                                { \
-                                    HandleDiagnosticRecord (h, ht, rc); \
-                                } \
-                                if (rc == SQL_ERROR) \
-                                { \
-                                    fprintf(stderr, "Error in " #x "\n"); \
-                                    if (hStmt)    { \
-																			SQLFreeHandle(SQL_HANDLE_STMT, hStmt); \
-																		} \
-																		if (hDbc)    { \
-																			SQLDisconnect(hDbc); \
-																			SQLFreeHandle(SQL_HANDLE_DBC, hDbc); \
-																		} \
-																		if (hEnv)    { \
-																				SQLFreeHandle(SQL_HANDLE_ENV, hEnv); \
-																		} \
-																		exit(-1); \
-                                }  \
-                            }
-
-#endif
-
 struct M4TS
 {//storing series data
 	vector < float> categories_vect;
@@ -367,14 +311,6 @@ struct M4TS
 	}
 	M4TS() {};
 };
-
-#if defined USE_ODBC        
-void HandleDiagnosticRecord(SQLHANDLE      hHandle,
-	SQLSMALLINT    hType,
-	RETCODE        RetCode);
-#endif 
-
-
 
 struct AdditionalParams
 {//Per series, important
@@ -520,109 +456,6 @@ int main(int argc, char** argv)
 	if (LBACK == 0)
 		cout << "Doing final of " << VARIABLE << " into " << OUTPUT_DIR << endl;
 
-
-#if defined USE_ODBC
-	time_t t = time(0);   // get time now
-	struct tm* now = localtime(&t);
-	TIMESTAMP_STRUCT now_ts;
-	now_ts.year = now->tm_year + 1900;
-	now_ts.month = now->tm_mon + 1;
-	now_ts.day = now->tm_mday;
-	now_ts.hour = now->tm_hour;
-	now_ts.minute = now->tm_min;
-	now_ts.second = now->tm_sec;
-	now_ts.fraction = 0; //reportedly needed
-
-	const int OFFSET_TO_FIRST_ACTUAL = 5;
-	string insertQuery_str = "insert into M72nn(run, LBack, ibig, series, epoch ";
-	for (int iq = 1; iq <= OUTPUT_SIZE; iq++)
-	{
-		stringstream ss;
-		ss << iq;
-		string iq_str = ss.str();
-		insertQuery_str = insertQuery_str + ", actual" + iq_str + ", forec" + iq_str;
-	}
-	insertQuery_str = insertQuery_str + ", trainingError, variable, n, dateTimeOfPrediction) \
-    values(? , ? , ? , ? , ? ";
-	for (int iq = 1; iq <= OUTPUT_SIZE; iq++)
-	{
-		insertQuery_str = insertQuery_str + ",?,?";
-	}
-	insertQuery_str = insertQuery_str + ",?,?,?,?)";
-#if defined _WINDOWS  
-	wstring insertQuery(insertQuery_str.begin(), insertQuery_str.end());
-	SQLWCHAR* sqlQuery = (SQLWCHAR*) insertQuery.c_str();
-#else
-	SQLCHAR* sqlQuery = (SQLCHAR*) insertQuery_str.c_str();
-#endif
-
-	SQLHENV  hEnv = NULL;
-	SQLHDBC  hDbc = NULL;
-	SQLHSTMT hStmt = NULL, hInsertStmt = NULL;
-
-	if (SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &hEnv) == SQL_ERROR)
-	{
-		fprintf(stderr, "Unable to allocate an environment handle\n");
-		exit(-1);
-	}
-	TRYODBC(hEnv,
-		SQL_HANDLE_ENV,
-		SQLSetEnvAttr(hEnv,
-			SQL_ATTR_ODBC_VERSION,
-			(SQLPOINTER) SQL_OV_ODBC3,
-			0));
-
-	// Allocate a connection
-	TRYODBC(hEnv,
-		SQL_HANDLE_ENV,
-		SQLAllocHandle(SQL_HANDLE_DBC, hEnv, &hDbc));
-
-	TRYODBC(hDbc,
-		SQL_HANDLE_DBC,
-		SQLDriverConnect(hDbc,
-			NULL,
-			pwszConnStr,
-			SQL_NTS,
-			NULL,
-			0,
-			NULL,
-			SQL_DRIVER_COMPLETE));
-	fprintf(stderr, "Connected!\n");
-
-	TRYODBC(hDbc,
-		SQL_HANDLE_DBC,
-		SQLSetConnectAttr(hDbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER) SQL_AUTOCOMMIT_OFF, SQL_IS_INTEGER));
-
-	TRYODBC(hDbc,
-		SQL_HANDLE_DBC,
-		SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hInsertStmt));
-
-	TRYODBC(hInsertStmt,
-		SQL_HANDLE_STMT,
-		SQLPrepare(hInsertStmt, sqlQuery, SQL_NTS));
-
-	SQLLEN nullTerminatedStringOfRun = SQL_NTS;
-	SQLLEN nullTerminatedStringOfSeries = SQL_NTS;
-	SQLLEN nullTerminatedStringOfVariable = SQL_NTS;
-
-	TRYODBC(hInsertStmt,
-		SQL_HANDLE_STMT,
-		SQLBindParameter(hInsertStmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, 0, 0, (SQLCHAR*) run.c_str(), 0, &nullTerminatedStringOfRun));
-
-	TRYODBC(hInsertStmt,
-		SQL_HANDLE_STMT,
-		SQLBindParameter(hInsertStmt, 2, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, (SQLPOINTER) &LBACK, 0, NULL));
-
-	// variable, n, dateTimeOfPrediction
-	TRYODBC(hInsertStmt,
-		SQL_HANDLE_STMT,
-		SQLBindParameter(hInsertStmt, OFFSET_TO_FIRST_ACTUAL + 2 * OUTPUT_SIZE + 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, 0, 0, (SQLCHAR*) VARIABLE.c_str(), 0, &nullTerminatedStringOfVariable));
-
-	TRYODBC(hInsertStmt,
-		SQL_HANDLE_STMT,
-		SQLBindParameter(hInsertStmt, OFFSET_TO_FIRST_ACTUAL + 2 * OUTPUT_SIZE + 4, SQL_PARAM_INPUT, SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP, 0, 0, &now_ts, sizeof(TIMESTAMP_STRUCT), NULL));
-#endif
-
 	random_device rd;     // only used once to initialise (seed) engine
 	mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
 
@@ -688,12 +521,6 @@ int main(int argc, char** argv)
 		string outputPath = OUTPUT_DIR + '/' + VARIABLE + "_" + to_string(ibigDb) + "_LB" + to_string(LBACK) + ".csv";
 		vector<float> perfValid_vect;
 		int epochOfLastChangeOfLRate = -1;
-
-#if defined USE_ODBC        
-		TRYODBC(hInsertStmt,
-			SQL_HANDLE_STMT,
-			SQLBindParameter(hInsertStmt, 3, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, (SQLPOINTER) &ibigDb, 0, NULL));
-#endif 
 
 		//create nets
 		array<ParameterCollection, NUM_OF_NETS> paramsCollection_arr;//per net
@@ -796,17 +623,11 @@ int main(int argc, char** argv)
 		//nesting: ibig
 		for (int iEpoch = 0; iEpoch < NUM_OF_TRAIN_EPOCHS; iEpoch++)
 		{
-#if defined USE_ODBC
-			TRYODBC(hInsertStmt,
-				SQL_HANDLE_STMT,
-				SQLBindParameter(hInsertStmt, 5, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, (SQLPOINTER) &iEpoch, 0, NULL));
-#endif
-
 			clock_t begin_time = clock();
 			unordered_map<string, array<float, NUM_OF_NETS>> netPerf_map;
 			for (int inet = 0; inet < NUM_OF_NETS; inet++)
-			{  //Parellalize here, if you can :-)
-//initialize perf matrix
+			{	//Parellalize here, if you can :-)
+				//initialize perf matrix
 				for (auto iter = series_vect.begin(); iter != series_vect.end(); ++iter)
 				{
 					string series = *iter;
@@ -1521,16 +1342,6 @@ int main(int argc, char** argv)
 					string series = *iter;
 					auto m4Obj = allSeries_map[series];
 
-#if defined USE_ODBC        
-					TRYODBC(hInsertStmt,
-						SQL_HANDLE_STMT,
-						SQLBindParameter(hInsertStmt, 4, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, 0, 0, (SQLCHAR*) series.c_str(), 0, &nullTerminatedStringOfSeries));
-
-					TRYODBC(hInsertStmt,
-						SQL_HANDLE_STMT,
-						SQLBindParameter(hInsertStmt, OFFSET_TO_FIRST_ACTUAL + 2 * OUTPUT_SIZE + 3, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, (SQLPOINTER) &m4Obj.n, 0, NULL));
-#endif 
-
 					float avgLoss;
 					vector<float> avgLatest;
 					vector<float> avgAvg;
@@ -1585,26 +1396,6 @@ int main(int argc, char** argv)
 
 						if (LBACK > 0)
 						{
-#if defined USE_ODBC        
-							TRYODBC(hInsertStmt,
-								SQL_HANDLE_STMT,
-								SQLBindParameter(hInsertStmt, OFFSET_TO_FIRST_ACTUAL + 2 * OUTPUT_SIZE + 1, SQL_PARAM_INPUT, SQL_C_FLOAT, SQL_FLOAT, 0, 0, (SQLPOINTER) &avgLoss, 0, NULL));
-
-							for (int iii = 0; iii < OUTPUT_SIZE; iii++)
-							{
-								int ipos = OFFSET_TO_FIRST_ACTUAL + 1 + 2 * iii;
-								TRYODBC(hInsertStmt,
-									SQL_HANDLE_STMT,
-									SQLBindParameter(hInsertStmt, ipos, SQL_PARAM_INPUT, SQL_C_FLOAT, SQL_FLOAT, 0, 0, (SQLPOINTER) &m4Obj.testVals[iii], 0, NULL));
-
-								TRYODBC(hInsertStmt,
-									SQL_HANDLE_STMT,
-									SQLBindParameter(hInsertStmt, ipos + 1, SQL_PARAM_INPUT, SQL_C_FLOAT, SQL_FLOAT, 0, 0, (SQLPOINTER) &avgAvg[iii], 0, NULL));
-							}
-							TRYODBC(hInsertStmt,
-								SQL_HANDLE_STMT,
-								SQLExecute(hInsertStmt));
-#endif 
 							float qLoss = errorFunc(avgAvg, m4Obj.testVals);
 							topnEpochAvgLosses.push_back(qLoss);
 						}
@@ -1655,14 +1446,6 @@ int main(int argc, char** argv)
 					}
 				}
 			}
-#if defined USE_ODBC  
-			TRYODBC(hDbc,
-				SQL_HANDLE_DBC,
-				SQLEndTran(
-					SQL_HANDLE_DBC,
-					hDbc,
-					SQL_COMMIT));
-#endif
 		}//through epochs of RNN
 
 		//some diagnostic info
@@ -1774,66 +1557,3 @@ int main(int argc, char** argv)
 		historyOfAdditionalParams_map.clear();
 	}//big loop
 }//main
-
-
-#if defined USE_ODBC
-#if defined _WINDOWS
-void HandleDiagnosticRecord(SQLHANDLE      hHandle,
-	SQLSMALLINT    hType,
-	RETCODE        RetCode)
-{
-	SQLSMALLINT iRec = 0;
-	SQLINTEGER  iError;
-	WCHAR       wszMessage[1000];
-	WCHAR       wszState[SQL_SQLSTATE_SIZE + 1];
-
-
-	if (RetCode == SQL_INVALID_HANDLE)
-	{
-		fwprintf(stderr, L"Invalid handle!\n");
-		return;
-	}
-
-	while (SQLGetDiagRec(hType,
-		hHandle,
-		++iRec,
-		wszState,
-		&iError,
-		wszMessage,
-		(SQLSMALLINT) (sizeof(wszMessage) / sizeof(WCHAR)),
-		(SQLSMALLINT*) NULL) == SQL_SUCCESS)
-	{
-		fwprintf(stderr, L"[%5.5s] %s (%d)\n", wszState, wszMessage, iError);
-	}
-}
-#else
-void HandleDiagnosticRecord(SQLHANDLE      hHandle,
-	SQLSMALLINT    hType,
-	RETCODE        RetCode)
-{
-	SQLSMALLINT iRec = 0;
-	SQLINTEGER  iError;
-	SQLCHAR       wszMessage[1000];
-	SQLCHAR       wszState[SQL_SQLSTATE_SIZE + 1];
-
-
-	if (RetCode == SQL_INVALID_HANDLE)
-	{
-		fwprintf(stderr, L"Invalid handle!\n");
-		return;
-	}
-
-	while (SQLGetDiagRec(hType,
-		hHandle,
-		++iRec,
-		wszState,
-		&iError,
-		wszMessage,
-		1000,
-		NULL) == SQL_SUCCESS)
-	{
-		fwprintf(stderr, L"[%5.5s] %s (%d)\n", wszState, wszMessage, iError);
-	}
-}
-#endif
-#endif
