@@ -61,9 +61,9 @@ These blocks are as they were during the final forecasting run. You need comment
 using namespace std;
 using namespace dynet;
 
-string DATA_DIR = "f:\\progs\\data\\M4DataSet\\"; //with the competition data csvs
+string DATA_DIR = "C:\\Dev\\data\\M4_Dataset\\Train\\"; //with the competition data csvs
 //string DATA_DIR="/home/uber/progs/data/M4DataSet/";
-string OUTPUT_DIR = "f:\\progs\\data\\M4\\"; 
+string OUTPUT_DIR = "C:\\Dev\\data\\M4_Output\\";
 //string OUTPUT_DIR="/home/uber/progs/data/M4/";
 
 int LBACK = 0; //LBACK 0 means final mode: learning on all data and forecasting. LBACK=1 would move back by OUTPUT_SIZE, and forecast last known OUTPUT_SIZE points, for backtesting. LBACK could be a larger integer, but then number of series shrinks.
