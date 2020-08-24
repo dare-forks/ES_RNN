@@ -69,7 +69,7 @@ string OUTPUT_DIR = "C:\\Dev\\data\\M4_Output\\";
 
 int LBACK = 0; //LBACK 0 means final mode: learning on all data and forecasting. LBACK=1 would move back by OUTPUT_SIZE, and forecast last known OUTPUT_SIZE points, for backtesting. LBACK could be a larger integer, but then number of series shrinks.
 
-
+/*
 //PARAMS--------------
 string VARIABLE = "Hourly";
 const string run = "50/49 Att 4/5 1,4)(24,168) LR=0.01,{7,5e-3f},{18,1e-3f},{22,3e-4f} EPOCHS=27, LVP=10, CSP=1";
@@ -103,7 +103,7 @@ const int MIN_INP_SEQ_LEN = 0;
 const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  //this is compared to n==(total length - OUTPUT_SIZE). Total length may be truncated by LBACK
 const int MAX_SERIES_LENGTH = 53 * SEASONALITY2 + MIN_SERIES_LENGTH;  //==all
 const int TOPN = 4;
-
+*/
 
 /*
 string VARIABLE = "Weekly";
@@ -142,7 +142,7 @@ const int MAX_SERIES_LENGTH = 6 * SEASONALITY + MIN_SERIES_LENGTH;  //==all
 const int TOPN = 3;
 */
 
-/*
+
 string VARIABLE = "Daily";
 const string run = "Final 50/49 730 4/5 (1,3)(7,14) LR=3e-4 {9,1e-4f} EPOCHS=13, LVP=100 13w";
 //#define USE_RESIDUAL_LSTM
@@ -176,7 +176,7 @@ const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  /
                                                                                //##93     323    2940    2357    4197    9919 
 const int MAX_SERIES_LENGTH = 13 * SEASONALITY + MIN_SERIES_LENGTH;
 const int TOPN = 4;
-*/
+
 
 /*
 string VARIABLE = "Yearly";
