@@ -53,8 +53,8 @@ string OutputFolderName = "";
 int LBACK = 0;
 
 int InstanceId = 0;
-int MaxSeriesLength = 10000;
-int MaxSeriesCount = 3000;
+int MaxSeriesLength = 1000;		// Default 1000 can be reduced to the M43-Daily default of 114
+int MaxSeriesCount = 0;			// Default 0 means no limitation
 
 // There needs to be exactly 7 command line parameters in the correct order
 // InstanceId InputFileName CategoryFileName OutputFolderName LBACK MaxSeriesLength MaxSeriesCount
@@ -118,20 +118,12 @@ const int MIN_INP_SEQ_LEN = 0;
 const int MIN_SERIES_LENGTH = OUTPUT_SIZE + INPUT_SIZE + MIN_INP_SEQ_LEN + 2;  //this is compared to n==(total length - OUTPUT_SIZE). Total length may be truncated by LBACK
 																			   //#Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
 																			   //##93     323    2940    2357    4197    9919
-const int MAX_SERIES_LENGTH = 13 * SEASONALITY + MIN_SERIES_LENGTH;
 const int TOPN = 4;
 //end of VARIABLE-specific params
 
 const int BIG_LOOP = 3;
 const int NUM_OF_NETS = 5;
 const unsigned int ATTENTION_HSIZE = STATE_HSIZE;
-
-
-#if defined _DEBUG
-const int MAX_NUM_OF_SERIES = 20;
-#else
-const int MAX_NUM_OF_SERIES = -1;
-#endif // _DEBUG
 
 const unsigned int NUM_OF_CATEGORIES = 6;
 const int AVERAGING_LEVEL = 5;
@@ -225,9 +217,9 @@ struct M4TS
 		{
 			n = vals.size();
 		}
-		if (n > MAX_SERIES_LENGTH)
+		if (n > MaxSeriesLength)
 		{//chop long series
-			vals.erase(vals.begin(), vals.begin() + (n - MAX_SERIES_LENGTH)); //remove some early data
+			vals.erase(vals.begin(), vals.begin() + (n - MaxSeriesLength)); //remove some early data
 			n = vals.size();
 		}
 	}
@@ -409,7 +401,7 @@ int main(int argc, char** argv)
 			series_vect.push_back(series);
 			allSeries_map[series] = m4Obj;
 		}
-		if (MAX_NUM_OF_SERIES > 0 && series_vect.size() >= MAX_NUM_OF_SERIES)
+		if (MaxSeriesCount > 0 && series_vect.size() >= MaxSeriesCount)
 			break;
 	}
 	cout << "num of series:" << series_vect.size() << endl;
