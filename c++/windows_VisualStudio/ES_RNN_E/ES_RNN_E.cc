@@ -43,10 +43,48 @@ These blocks are as they were during the final forecasting run. You need comment
 using namespace std;
 using namespace dynet;
 
-string DATA_DIR = "C:\\Dev\\data\\M4_Dataset\\Train\\"; //with the competition data csvs
-string OUTPUT_DIR = "C:\\Dev\\data\\M4_Output\\";
+string InputFileName = "";
+string CategoryFileName = "";
+string OutputFolderName = "";
 
-int LBACK = 0; //LBACK 0 means final mode: learning on all data and forecasting. LBACK=1 would move back by OUTPUT_SIZE, and forecast last known OUTPUT_SIZE points, for backtesting. LBACK could be a larger integer, but then number of series shrinks.
+// LBACK 0 means final mode: learning on all data and forecasting.
+// LBACK=1 would move back by OUTPUT_SIZE, and forecast last known OUTPUT_SIZE points, for backtesting.
+// LBACK could be a larger integer, but then number of series shrinks.
+int LBACK = 0;
+
+int InstanceId = 0;
+int MaxSeriesLength = 10000;
+int MaxSeriesCount = 3000;
+
+// There needs to be exactly 7 command line parameters in the correct order
+// InstanceId InputFileName CategoryFileName OutputFolderName LBACK MaxSeriesLength MaxSeriesCount
+bool ParseArguments(int& argc, char**& argv)
+{
+	bool success = false;
+
+	if (argc == 8)
+	{
+		try
+		{
+			InstanceId = std::stoi(argv[1]);
+			InputFileName = argv[2];
+			CategoryFileName = argv[3];
+			OutputFolderName = argv[4];
+			LBACK = std::stoi(argv[5]);
+			MaxSeriesLength = std::stoi(argv[6]);
+			MaxSeriesCount = std::stoi(argv[7]);
+
+			success = true;
+		}
+		catch (exception& e)
+		{
+			cerr << "Exception at ParseArguments" << endl;
+			cerr << e.what() << endl;
+		}
+	}
+
+	return success;
+}
 
 // Model architecture specific parameters
 string VARIABLE = "Daily";
@@ -106,10 +144,6 @@ const float BIG_FLOAT = 1e38;//numeric_limits<float>::max();
 const bool PRINT_DIAGN = false;
 const float TAU = PERCENTILE / 100.;
 const float TRAINING_TAU = TRAINING_PERCENTILE / 100.;
-
-string INPUT_PATH = DATA_DIR + VARIABLE + "-train.csv";
-string INFO_INPUT_PATH = DATA_DIR + "M4-info.csv";
-
 
 Expression squash(const Expression& x)
 {
@@ -301,6 +335,16 @@ int main(int argc, char** argv)
 {
 	dynet::initialize(argc, argv);
 
+	// Read command line arguments
+	if (!ParseArguments(argc, argv))
+	{
+		cout << "Incorrect command line arguments" << endl;
+		cout << "You must provide exactly 7 parameters in the below order" << endl;
+		cout << "InstanceId InputFileName CategoryFileName OutputFolderName LBACK MaxSeriesLength MaxSeriesCount" << endl;
+
+		exit(EXIT_FAILURE);
+	}
+
 	int ibigOffset = 0;
 	if (argc == 2)
 		ibigOffset = atoi(argv[1]);
@@ -314,35 +358,11 @@ int main(int argc, char** argv)
 		LEVEL_VARIABILITY_PENALTY = 0;
 	}
 
-	time_t rawtime;
-	struct tm* timeinfo;
-	char buffer[80];
-
-	time(&rawtime);
-	timeinfo = localtime(&rawtime);
-
-	strftime(buffer, sizeof(buffer), "%Y-%m-%d_%I_%M", timeinfo);
-	std::string timestamp_str(buffer);
-
-	ostringstream convert2;
-
-#if defined _WINDOWS
-	OUTPUT_DIR = OUTPUT_DIR + "\\" + VARIABLE + timestamp_str;
-	if (LBACK == 0)
-		OUTPUT_DIR = OUTPUT_DIR + "Final\\";
-	OUTPUT_DIR = OUTPUT_DIR + convert2.str();
-	string exec = string("mkdir ") + OUTPUT_DIR;//so occasionaly, if the programs do not start within the same minute, you may find more than one output dir created. After the run just manullay put them together.
-#else
-	OUTPUT_DIR = OUTPUT_DIR + "/" + VARIABLE + timestamp_str;
-	if (LBACK == 0)
-		OUTPUT_DIR = OUTPUT_DIR + "Final/";
-	OUTPUT_DIR = OUTPUT_DIR + convert2.str();
-	string exec = string("mkdir -p ") + OUTPUT_DIR;
-#endif
+	string exec = string("mkdir ") + OutputFolderName;
 	system(exec.c_str());
 
 	if (LBACK == 0)
-		cout << "Doing final of " << VARIABLE << " into " << OUTPUT_DIR << endl;
+		cout << "Doing final of " << VARIABLE << " into " << OutputFolderName << endl;
 
 	random_device rd;     // only used once to initialise (seed) engine
 	mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
@@ -351,7 +371,7 @@ int main(int argc, char** argv)
 	unordered_map<string, M4TS> allSeries_map(30000);//max series in one chunk would be 24k for yearly series
 	unordered_map<string, string> seriesCategories_map(120000);//100k series
 
-	ifstream infoFile(INFO_INPUT_PATH);
+	ifstream infoFile(CategoryFileName);
 	string line;
 	getline(infoFile, line); //header
 	while (getline(infoFile, line))
@@ -366,7 +386,7 @@ int main(int argc, char** argv)
 	}
 
 
-	ifstream file(INPUT_PATH);
+	ifstream file(InputFileName);
 	getline(file, line); //header
 	while (getline(file, line))
 	{
@@ -406,7 +426,7 @@ int main(int argc, char** argv)
 	for (int ibig = 0; ibig < BIG_LOOP; ibig++)
 	{
 		int ibigDb = ibigOffset + ibig;
-		string outputPath = OUTPUT_DIR + '/' + VARIABLE + "_" + to_string(ibigDb) + "_LB" + to_string(LBACK) + ".csv";
+		string outputPath = OutputFolderName + '/' + VARIABLE + "_" + to_string(ibigDb) + "_LB" + to_string(LBACK) + ".csv";
 		vector<float> perfValid_vect;
 		int epochOfLastChangeOfLRate = -1;
 
